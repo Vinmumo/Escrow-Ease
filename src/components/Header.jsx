@@ -1,7 +1,7 @@
-export default function Header(){
-    return(
-       <div className="Header">
-        <h1>Escrowease</h1>
-       </div>
-    )
+export default function Header() {
+  return (
+    <header className="Header">
+      <h1>Escrow Ease</h1>
+    </header>
+  )
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams,useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import Header from './Header';
 
 function PaymentForm() {
     const params = useParams();
@@ -9,6 +10,8 @@ function PaymentForm() {
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [errors, setErrors] = useState({});
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -37,19 +40,34 @@ function PaymentForm() {
             } catch (error) {
                 console.error('Error fetching car data:', error);
                 setIsLoading(false);
+                setErrors({ fetch: 'Failed to load car data' });
             }
         };
 
         fetchCarData();
     }, [params.id]);
 
-    if (isLoading) {
-        return <div className='loading'>Loading...</div>;
-    }
+    const validateForm = () => {
+        const newErrors = {};
 
-    if (!car) {
-        return <div>Car not found</div>;
-    }
+        if (!name.trim()) newErrors.name = 'Name is required';
+        if (!email.trim()) {
+            newErrors.email = 'Email is required';
+        } else if (!/\S+@\S+\.\S+/.test(email)) {
+            newErrors.email = 'Email is invalid';
+        }
+        if (!phone.trim()) {
+            newErrors.phone = 'Phone number is required';
+        } else if (!/^\d{10,}$/.test(phone.replace(/\D/g, ''))) {
+            newErrors.phone = 'Phone number must be at least 10 digits';
+        }
+        if (paymentMethods.length === 0) {
+            newErrors.payment = 'Please select at least one payment method';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
 
     const handleCheckboxChange = event => {
         const { value, checked } = event.target;
@@ -58,129 +76,181 @@ function PaymentForm() {
         } else {
             setPaymentMethods(paymentMethods.filter(method => method !== value));
         }
+        // Clear payment error if user selects a method
+        if (errors.payment) {
+            setErrors({ ...errors, payment: '' });
+        }
     };
 
-    const customer = {car,
-        paymentMethods,
-        name,
-        email,
-        phone}
-    const handleSubmit = event => {
+    const handleSubmit = async event => {
         event.preventDefault();
-        fetch("https://projectdb-885a.onrender.com/Customers", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(customer)
-          })
-          .then(response => response.json())
-        .then(data => {
-            console.log(data);
-        })
-        console.log(customer);
-        navigate(`/`)
-        alert("Your Transaction is being processed, we will reach out to you via the email you provided. Thank you for visiting Escrowease.")
+
+        if (!validateForm()) {
+            return;
+        }
+
+        const customer = {
+            car,
+            paymentMethods,
+            name,
+            email,
+            phone
+        };
+
+        setIsSubmitting(true);
+
+        try {
+            const response = await fetch("https://projectdb-885a.onrender.com/Customers", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(customer)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to submit transaction');
+            }
+
+            const data = await response.json();
+            console.log('Transaction submitted:', data);
+
+            // Show success message
+            alert("Your Transaction is being processed, we will reach out to you via the email you provided. Thank you for visiting Escrowease.");
+            navigate('/');
+        } catch (error) {
+            console.error('Error submitting transaction:', error);
+            setErrors({ submit: 'Failed to process transaction. Please try again.' });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
+    if (isLoading) {
+        return <div className='loading'>Loading car details...</div>;
+    }
 
-   
+    if (!car || !car.id) {
+        return (
+            <>
+                <Header />
+                <div style={{ padding: '2rem', textAlign: 'center', minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div>
+                        <h2>Car not found</h2>
+                        <button onClick={() => navigate('/list')} className="button">Back to Cars</button>
+                    </div>
+                </div>
+            </>
+        );
+    }
+
     return (
-        <div className="payment-container">
-            <div className="car">
+        <>
+            <Header />
+            <div className="payment-container">
+                <div className="car">
+                    <h2>{car.name}</h2>
+                    <img src={car.pic} alt={car.name} className="car-image" />
+                    <h3>{car.price}</h3>
+                </div>
 
-                <h2>{car.name}</h2>
-                <img src={car.pic} alt="car" className="car-image" />
-                <h3>{car.price}</h3>
+                <div className="payment-form-container">
+                    <h2>Start Transaction</h2>
 
+                    {errors.submit && <div className="message" style={{ background: '#fee', color: '#c33', padding: '1rem', borderRadius: '6px', marginBottom: '1rem' }}>{errors.submit}</div>}
+                    {errors.fetch && <div className="message" style={{ background: '#fee', color: '#c33', padding: '1rem', borderRadius: '6px', marginBottom: '1rem' }}>{errors.fetch}</div>}
+
+                    <form onSubmit={handleSubmit}>
+                        <div>
+                            <h4 style={{ marginBottom: '1rem', color: '#333' }}>Select Payment Methods:</h4>
+                            <div className="payment-methods">
+                                <label className="payment-method">
+                                    <input
+                                        type="checkbox"
+                                        value="M-Pesa"
+                                        checked={paymentMethods.includes('M-Pesa')}
+                                        onChange={handleCheckboxChange}
+                                    />
+                                    M-Pesa
+                                </label>
+                                <label className="payment-method">
+                                    <input
+                                        type="checkbox"
+                                        value="Card"
+                                        checked={paymentMethods.includes('Card')}
+                                        onChange={handleCheckboxChange}
+                                    />
+                                    Card
+                                </label>
+                                <label className="payment-method">
+                                    <input
+                                        type="checkbox"
+                                        value="PayPal"
+                                        checked={paymentMethods.includes('PayPal')}
+                                        onChange={handleCheckboxChange}
+                                    />
+                                    PayPal
+                                </label>
+                            </div>
+                            {errors.payment && <p style={{ color: '#c33', fontSize: '0.85rem', marginTop: '0.5rem' }}>* {errors.payment}</p>}
+                        </div>
+
+                        <div className='info'>
+                            <div>
+                                <input
+                                    className='name'
+                                    placeholder='Full Name'
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => {
+                                        setName(e.target.value);
+                                        if (errors.name) setErrors({ ...errors, name: '' });
+                                    }}
+                                />
+                                {errors.name && <p style={{ color: '#c33', fontSize: '0.85rem', marginTop: '0.3rem' }}>* {errors.name}</p>}
+                            </div>
+
+                            <div>
+                                <input
+                                    className='name'
+                                    placeholder='Email Address'
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => {
+                                        setEmail(e.target.value);
+                                        if (errors.email) setErrors({ ...errors, email: '' });
+                                    }}
+                                />
+                                {errors.email && <p style={{ color: '#c33', fontSize: '0.85rem', marginTop: '0.3rem' }}>* {errors.email}</p>}
+                            </div>
+
+                            <div>
+                                <input
+                                    className='name'
+                                    placeholder='Phone Number'
+                                    type="tel"
+                                    value={phone}
+                                    onChange={(e) => {
+                                        setPhone(e.target.value);
+                                        if (errors.phone) setErrors({ ...errors, phone: '' });
+                                    }}
+                                />
+                                {errors.phone && <p style={{ color: '#c33', fontSize: '0.85rem', marginTop: '0.3rem' }}>* {errors.phone}</p>}
+                            </div>
+                        </div>
+
+                        <button type="submit" disabled={isSubmitting} style={{ opacity: isSubmitting ? 0.6 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
+                            {isSubmitting ? 'Processing...' : 'Submit Transaction'}
+                        </button>
+                    </form>
+                </div>
+
+                <div className="seller-info">
+                    <img src={car.seller_img} alt={car.seller} className="seller-image" />
+                    <p className="seller-name">{car.seller}</p>
+                </div>
             </div>
-
-            <div className="payment-form-container">
-                <h2>Start Transaction</h2>
-                <form onSubmit={handleSubmit}>
-                <div className="payment-methods">
-                    <label className="payment-method">
-                        <input 
-                            type="checkbox"
-                            value="M-Pesa"
-                            checked={paymentMethods.includes('M-Pesa')}
-                            onChange={handleCheckboxChange}
-                            
-                        />
-                        M-Pesa
-                    </label>
-                    <label className="payment-method">
-                        <input 
-                            type="checkbox"
-                            value="Card"
-                            checked={paymentMethods.includes('Card')}
-                            onChange={handleCheckboxChange}
-                           
-                        />
-                        Card
-                    </label>
-                    <label className="payment-method">
-                        <input 
-                            type="checkbox"
-                            value="PayPal"
-                            checked={paymentMethods.includes('PayPal')}
-                            onChange={handleCheckboxChange}
-                           
-                        />
-                        PayPal
-                    </label>
-                </div>
-                <div className='info'>
-                <div>
-                    <label>
-                        
-                        <input 
-                        className='name'
-                            placeholder='Name'
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            required
-                        />
-                    </label>
-                </div>
-                <div>
-                    <label>
-                       
-                        <input 
-                         className='name'
-                        placeholder='Email'
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                        />
-                    </label>
-                </div>
-                <div>
-                    <label>
-                        
-                        <input 
-                         className='name'
-                        placeholder='Phone Number'
-                            type="tel"
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            minLength={10}
-                            required
-                        />
-                    </label>
-                </div>
-                </div>
-                <button type="submit">Submit</button>
-            </form>
-            </div>
-
-            <div className="seller-info">
-                <img src={car.seller_img} alt="Seller" className="seller-image" />
-                <p className="seller-name">{car.seller}</p>
-            </div>
-        </div>
+        </>
     );
 }
 
